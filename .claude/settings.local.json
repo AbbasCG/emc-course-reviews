@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(Get-ChildItem -Path \"D:\\\\xampp\\\\htdocs\\\\emc-course-reviews\" -Force)",
+      "Bash(Select-Object Name, Mode)",
+      "Bash(Remove-Item \"D:\\\\xampp\\\\htdocs\\\\emc-course-reviews\\\\app\\\\Exports\\\\ReviewsExport.php\" -Force)",
+      "Bash(Write-Host \"Deleted ReviewsExport.php\")",
+      "Bash(del \"D:\\\\xampp\\\\htdocs\\\\emc-course-reviews\\\\app\\\\Exports\\\\ReviewsExport.php\")"
+    ]
+  }
+}
