@@ -2,6 +2,7 @@
 
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\AdminController;
+use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\ReviewController;
 use App\Http\Controllers\AuthController;
 
@@ -28,6 +29,11 @@ Route::prefix('admin')->name('admin.')->middleware('auth')->group(function () {
     Route::get('/review-campaigns/{campaign}/reviews', [AdminController::class, 'showCampaignReviews'])->name('campaigns.reviews');
     Route::get('/review-campaigns/{campaign}/export-csv', [AdminController::class, 'exportCsv'])->name('campaigns.export-csv');
     Route::get('/review-campaigns/{campaign}/export-pdf', [AdminController::class, 'exportPdf'])->name('campaigns.exportPdf');
+
+    Route::get('/notifications', [NotificationController::class, 'index'])->name('notifications.index');
+    Route::post('/notifications/read-all', [NotificationController::class, 'markAllRead'])->name('notifications.read-all');
+    Route::get('/notifications/{notification}/open', [NotificationController::class, 'open'])->name('notifications.open');
+    Route::post('/notifications/{notification}/read', [NotificationController::class, 'markRead'])->name('notifications.read');
 });
 
 // Root redirect

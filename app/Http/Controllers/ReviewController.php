@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\StoreReviewRequest;
+use App\Models\AdminNotification;
 use App\Models\ReviewCampaign;
 use App\Models\CourseReview;
 use Illuminate\Database\QueryException;
@@ -53,7 +54,20 @@ class ReviewController extends Controller
         }
 
         try {
-            $campaign->reviews()->create($request->validated());
+            $review = $campaign->reviews()->create($request->validated());
+
+            AdminNotification::create([
+                'type'    => 'review',
+                'title'   => 'تم استلام تقييم جديد',
+                'message' => 'تم استلام تقييم جديد لدورة: ' . $campaign->course_name,
+                'data'    => [
+                    'campaign_id'  => $campaign->id,
+                    'review_id'    => $review->id,
+                    'student_name' => $request->student_name,
+                    'rating'       => $request->overall_rating,
+                ],
+            ]);
+
             return response()->json(['redirect' => route('review.success', $token)]);
         } catch (QueryException $e) {
             if ($request->email && str_contains($e->getMessage(), 'unique_review_per_email_campaign')) {

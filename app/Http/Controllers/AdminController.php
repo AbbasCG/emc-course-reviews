@@ -8,6 +8,7 @@ use App\Models\CourseReview;
 use Illuminate\Support\Str;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Mpdf\Mpdf;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class AdminController extends Controller
@@ -17,7 +18,7 @@ class AdminController extends Controller
         $totalCampaigns = ReviewCampaign::count();
         $totalReviews   = CourseReview::count();
         $averageRating  = round(CourseReview::avg('overall_rating') ?? 0, 2);
-        $latestReviews  = CourseReview::latest()->take(10)->with('campaign')->get();
+        $latestReviews  = CourseReview::latest()->take(5)->with('campaign')->get();
 
         $query = ReviewCampaign::withCount('reviews')
                                ->withAvg('reviews', 'overall_rating')
@@ -74,10 +75,51 @@ class AdminController extends Controller
             ->groupBy('difficulty_level')
             ->pluck('count', 'difficulty_level');
 
+        // ── Campaign status breakdown ──
+        $activeCampaigns   = ReviewCampaign::where('is_active', 1)
+            ->where(function ($q) { $q->whereNull('expires_at')->orWhere('expires_at', '>', now()); })
+            ->count();
+        $inactiveCampaigns  = ReviewCampaign::where('is_active', 0)->count();
+        $expiredCampaigns   = ReviewCampaign::whereNotNull('expires_at')
+            ->where('expires_at', '<', now())->count();
+        $expiringSoonCount  = ReviewCampaign::where('is_active', 1)
+            ->whereNotNull('expires_at')
+            ->where('expires_at', '>=', now())
+            ->where('expires_at', '<=', now()->addDays(7))
+            ->count();
+
+        // ── Quick insights ──
+        $topRatedCampaign     = ReviewCampaign::withCount('reviews')
+            ->withAvg('reviews', 'overall_rating')
+            ->whereHas('reviews')
+            ->orderByDesc('reviews_avg_overall_rating')
+            ->first();
+        $lowestRatedCampaign  = ReviewCampaign::withCount('reviews')
+            ->withAvg('reviews', 'overall_rating')
+            ->whereHas('reviews')
+            ->orderBy('reviews_avg_overall_rating')
+            ->first();
+        $mostReviewedCampaign = ReviewCampaign::withCount('reviews')
+            ->whereHas('reviews')
+            ->orderByDesc('reviews_count')
+            ->first();
+        $globalRecommendPct   = $totalReviews > 0 ? round($recommendYes / $totalReviews * 100) : 0;
+
+        // ── Rating breakdown (5 → 1) ──
+        $ratingBreakdown = collect([5, 4, 3, 2, 1])->mapWithKeys(
+            fn ($s) => [$s => CourseReview::where('overall_rating', $s)->count()]
+        );
+
+        // ── Recent activity ──
+        $latestCampaign = ReviewCampaign::latest()->first();
+
         return view('admin.dashboard', compact(
             'totalCampaigns', 'totalReviews', 'averageRating',
             'latestReviews', 'campaigns', 'filters',
-            'monthlyLabels', 'monthlyValues', 'recommendYes', 'recommendNo', 'difficultyRaw'
+            'monthlyLabels', 'monthlyValues', 'recommendYes', 'recommendNo', 'difficultyRaw',
+            'activeCampaigns', 'inactiveCampaigns', 'expiredCampaigns', 'expiringSoonCount',
+            'topRatedCampaign', 'lowestRatedCampaign', 'mostReviewedCampaign', 'globalRecommendPct',
+            'ratingBreakdown', 'latestCampaign'
         ));
     }
 
@@ -257,37 +299,49 @@ class AdminController extends Controller
 
     public function exportPdf(ReviewCampaign $campaign)
     {
-        if (!class_exists(\Barryvdh\DomPDF\Facade\Pdf::class)) {
-            return back()->with('error', 'يرجى تثبيت حزمة PDF: composer require barryvdh/laravel-dompdf:^3.0 -W');
+        try {
+            $reviews = $campaign->reviews()->latest()->get();
+            $total   = $reviews->count();
+            $recYes  = $reviews->where('would_recommend', true)->count();
+            $recNo   = $total - $recYes;
+
+            $stats = [
+                'total_reviews'        => $total,
+                'overall_avg'          => $total ? round($reviews->avg('overall_rating'), 1) : 0,
+                'content_avg'          => $total ? round($reviews->avg('course_content_rating'), 1) : 0,
+                'instructor_avg'       => $total ? round($reviews->avg('instructor_rating'), 1) : 0,
+                'organization_avg'     => $total ? round($reviews->avg('organization_rating'), 1) : 0,
+                'recommend_percentage' => $total ? round($recYes / $total * 100) : 0,
+                'recommend_yes'        => $recYes,
+                'recommend_no'         => $recNo,
+                'difficulty_data'      => $reviews->groupBy('difficulty_level')->map->count(),
+            ];
+
+            $html = view('admin.campaigns.pdf-report', compact('campaign', 'reviews', 'stats'))->render();
+
+            $mpdf = new Mpdf([
+                'mode'             => 'utf-8',
+                'format'           => 'A4',
+                'autoScriptToLang' => true,
+                'autoLangToFont'   => true,
+                'margin_top'       => 0,
+                'margin_bottom'    => 10,
+                'margin_left'      => 0,
+                'margin_right'     => 0,
+            ]);
+
+            $mpdf->SetDirectionality('rtl');
+            $mpdf->WriteHTML($html);
+
+            $filename = 'تقرير-تقييمات-' . $campaign->id . '-' . now()->format('Y-m-d') . '.pdf';
+
+            return response($mpdf->Output($filename, 'S'), 200, [
+                'Content-Type'        => 'application/pdf',
+                'Content-Disposition' => 'attachment; filename="' . $filename . '"',
+            ]);
+        } catch (\Exception $e) {
+            return back()->with('error', 'فشل تصدير PDF: ' . $e->getMessage());
         }
-
-        $reviewCount               = $campaign->reviews()->count();
-        $averageRating             = round($campaign->reviews()->avg('overall_rating') ?? 0, 2);
-        $averageContentRating      = round($campaign->reviews()->avg('course_content_rating') ?? 0, 2);
-        $averageInstructorRating   = round($campaign->reviews()->avg('instructor_rating') ?? 0, 2);
-        $averageOrganizationRating = round($campaign->reviews()->avg('organization_rating') ?? 0, 2);
-        $recommendCount            = $campaign->reviews()->where('would_recommend', 1)->count();
-        $recommendPct              = $reviewCount > 0 ? round($recommendCount / $reviewCount * 100) : 0;
-        $difficultyData            = $campaign->reviews()
-            ->selectRaw('difficulty_level, COUNT(*) as count')
-            ->groupBy('difficulty_level')
-            ->pluck('count', 'difficulty_level');
-        $reviews = $campaign->reviews()->latest()->take(30)->get();
-
-        $stats = [
-            'reviewCount'               => $reviewCount,
-            'averageRating'             => $averageRating,
-            'averageContentRating'      => $averageContentRating,
-            'averageInstructorRating'   => $averageInstructorRating,
-            'averageOrganizationRating' => $averageOrganizationRating,
-            'recommendPct'              => $recommendPct,
-            'difficultyData'            => $difficultyData,
-        ];
-
-        $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('admin.campaigns.pdf-report', compact('campaign', 'reviews', 'stats'))
-            ->setPaper('a4');
-
-        return $pdf->download('emc-review-report-' . $campaign->id . '.pdf');
     }
 
     private function computeExpiresAt(StoreReviewCampaignRequest $request, ?ReviewCampaign $existing = null): ?Carbon

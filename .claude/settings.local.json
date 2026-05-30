@@ -5,7 +5,16 @@
       "Bash(Select-Object Name, Mode)",
       "Bash(Remove-Item \"D:\\\\xampp\\\\htdocs\\\\emc-course-reviews\\\\app\\\\Exports\\\\ReviewsExport.php\" -Force)",
       "Bash(Write-Host \"Deleted ReviewsExport.php\")",
-      "Bash(del \"D:\\\\xampp\\\\htdocs\\\\emc-course-reviews\\\\app\\\\Exports\\\\ReviewsExport.php\")"
+      "Bash(del \"D:\\\\xampp\\\\htdocs\\\\emc-course-reviews\\\\app\\\\Exports\\\\ReviewsExport.php\")",
+      "Bash(composer require *)",
+      "Bash(php artisan *)",
+      "Bash(php -r \"require 'vendor/autoload.php'; echo class_exists\\('Barryvdh\\\\DomPDF\\\\Pdf'\\) ? 'dompdf OK' : 'dompdf MISSING';\")",
+      "Bash(php -r ' *)",
+      "Bash(php -r \"echo class_exists\\('Mpdf\\\\Mpdf'\\) ? 'mPDF installed' : 'mPDF NOT installed';\")",
+      "Bash(php composer.phar require mpdf/mpdf)",
+      "Bash(php -r \"require 'vendor/autoload.php'; echo class_exists\\('Mpdf\\\\Mpdf'\\) ? 'mPDF found' : 'NOT found';\")",
+      "Bash(php -r \"require 'vendor/mpdf/mpdf/src/Mpdf.php'; echo 'loaded';\")",
+      "Bash(php -r \"require 'vendor/autoload.php'; echo class_exists\\('Mpdf\\\\Mpdf'\\) ? 'mPDF v8 found: OK' : 'NOT found';\")"
     ]
   }
 }

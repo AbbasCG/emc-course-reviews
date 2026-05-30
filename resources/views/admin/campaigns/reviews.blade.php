@@ -14,18 +14,34 @@
 @endsection
 
 @section('nav-actions')
+<div x-data="{ syncing: false }">
+    <button type="button"
+            @click="syncing = true; const u = new URL(window.location.href); u.searchParams.set('synced', '1'); window.location.href = u.toString();"
+            :disabled="syncing"
+            class="nav-btn"
+            :class="syncing ? 'opacity-55' : ''">
+        <svg x-show="syncing" style="display:none;" class="w-3.5 h-3.5 animate-spin shrink-0" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/>
+        </svg>
+        <svg x-show="!syncing" class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+        </svg>
+        <span class="hidden sm:inline" x-text="syncing ? 'جارٍ...' : 'مزامنة'">مزامنة</span>
+    </button>
+</div>
 <a href="{{ route('admin.campaigns.exportPdf', $campaign) }}"
-   class="flex items-center gap-1.5 text-white text-xs font-bold px-4 py-2.5 rounded-xl transition-all hover:opacity-90 whitespace-nowrap"
-   style="background: linear-gradient(135deg, #7c3aed, #5b21b6);">
-    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+   class="nav-btn"
+   style="background:linear-gradient(135deg,#22334A,#1a2840);color:#fff;border-color:rgba(34,51,74,0.5);">
+    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"/>
     </svg>
     <span class="hidden sm:inline">تصدير PDF</span>
 </a>
 <a href="{{ route('admin.campaigns.export-csv', $campaign) }}"
-   class="flex items-center gap-1.5 text-white text-xs font-bold px-4 py-2.5 rounded-xl transition-all hover:opacity-90 whitespace-nowrap"
-   style="background: linear-gradient(135deg, #EC943C, #d4782a);">
-    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+   class="nav-btn"
+   style="background:linear-gradient(135deg,#EC943C,#d4782a);color:#fff;border-color:rgba(236,148,60,0.4);">
+    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
     </svg>
     <span class="hidden sm:inline">تصدير CSV</span>
@@ -51,91 +67,118 @@
 @section('content')
 <main class="max-w-7xl mx-auto px-4 sm:px-6 py-8 sm:py-10">
 
-    {{-- Filters --}}
-    <form method="GET" action="{{ route('admin.campaigns.reviews', $campaign) }}"
-          class="bg-white rounded-3xl shadow-sm border border-slate-100 p-5 sm:p-6 mb-6">
-        <div class="flex items-center gap-2 mb-4">
-            <svg class="w-4 h-4 text-slate-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2a1 1 0 01-.293.707L13 13.414V19a1 1 0 01-.553.894l-4 2A1 1 0 017 21v-7.586L3.293 6.707A1 1 0 013 6V4z"/>
+    {{-- Collapsible Filters --}}
+    @php $activeFilterCount = count(array_filter($reviewFilters)); @endphp
+    <div x-data="{ open: {{ $activeFilterCount > 0 ? 'true' : 'false' }} }"
+         class="bg-white rounded-3xl shadow-sm border border-slate-100 mb-6 overflow-hidden">
+
+        {{-- Toggle header --}}
+        <button type="button" @click="open = !open"
+                class="w-full flex items-center justify-between gap-3 px-5 sm:px-6 py-4 text-right hover:bg-slate-50 transition-colors">
+            <div class="flex items-center gap-2.5">
+                <div class="w-8 h-8 rounded-xl flex items-center justify-center shrink-0"
+                     style="background: linear-gradient(135deg, #2691C2, #22334A);">
+                    <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                              d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2a1 1 0 01-.293.707L13 13.414V19a1 1 0 01-.553.894l-4 2A1 1 0 017 21v-7.586L3.293 6.707A1 1 0 013 6V4z"/>
+                    </svg>
+                </div>
+                <span class="font-bold text-slate-800 text-sm">تصفية التقييمات</span>
+                @if($activeFilterCount > 0)
+                <span class="inline-flex items-center justify-center w-5 h-5 rounded-full text-xs font-bold text-white"
+                      style="background: #2691C2;">{{ $activeFilterCount }}</span>
+                @endif
+            </div>
+            <svg class="w-4 h-4 text-slate-400 transition-transform duration-200 shrink-0"
+                 :class="open ? 'rotate-180' : ''"
+                 fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
             </svg>
-            <span class="text-sm font-bold text-slate-700">تصفية التقييمات</span>
-            @if(array_filter($reviewFilters))
-            <span class="text-xs font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">مُفعّل</span>
-            @endif
-        </div>
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-            <div>
-                <label class="block text-xs font-bold text-slate-500 mb-1.5">اسم الطالب</label>
-                <input type="text" name="student_name" value="{{ $reviewFilters['student_name'] ?? '' }}"
-                    placeholder="ابحث بالاسم..."
-                    class="w-full px-3.5 py-2.5 rounded-2xl border-2 border-slate-200 focus:outline-none focus:border-[#2691C2] text-sm text-slate-900 placeholder-slate-400 transition-colors">
+        </button>
+
+        {{-- Filter form --}}
+        <form method="GET" action="{{ route('admin.campaigns.reviews', $campaign) }}"
+              x-show="open"
+              x-transition:enter="transition ease-out duration-200"
+              x-transition:enter-start="opacity-0 -translate-y-2"
+              x-transition:enter-end="opacity-100 translate-y-0"
+              x-transition:leave="transition ease-in duration-150"
+              x-transition:leave-start="opacity-100 translate-y-0"
+              x-transition:leave-end="opacity-0 -translate-y-2"
+              class="border-t border-slate-100 px-5 sm:px-6 pb-5 sm:pb-6 pt-5"
+              style="display: none;">
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+                <div>
+                    <label class="block text-xs font-bold text-slate-500 mb-1.5">اسم الطالب</label>
+                    <input type="text" name="student_name" value="{{ $reviewFilters['student_name'] ?? '' }}"
+                        placeholder="ابحث بالاسم..."
+                        class="w-full px-3.5 py-2.5 rounded-2xl border-2 border-slate-200 focus:outline-none focus:border-[#2691C2] text-sm text-slate-900 placeholder-slate-400 transition-colors">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-500 mb-1.5">البريد الإلكتروني</label>
+                    <input type="text" name="email" value="{{ $reviewFilters['email'] ?? '' }}"
+                        placeholder="ابحث بالبريد..."
+                        class="w-full px-3.5 py-2.5 rounded-2xl border-2 border-slate-200 focus:outline-none focus:border-[#2691C2] text-sm text-slate-900 placeholder-slate-400 transition-colors">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-500 mb-1.5">التقييم</label>
+                    <select name="rating"
+                        class="w-full px-3.5 py-2.5 rounded-2xl border-2 border-slate-200 focus:outline-none focus:border-[#2691C2] text-sm text-slate-900 bg-white transition-colors">
+                        <option value="">جميع التقييمات</option>
+                        @for($i = 5; $i >= 1; $i--)
+                        <option value="{{ $i }}" {{ ($reviewFilters['rating'] ?? '') == $i ? 'selected' : '' }}>{{ $i }} نجوم</option>
+                        @endfor
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-500 mb-1.5">يوصي بالدورة</label>
+                    <select name="recommend"
+                        class="w-full px-3.5 py-2.5 rounded-2xl border-2 border-slate-200 focus:outline-none focus:border-[#2691C2] text-sm text-slate-900 bg-white transition-colors">
+                        <option value="">الكل</option>
+                        <option value="yes" {{ ($reviewFilters['recommend'] ?? '') === 'yes' ? 'selected' : '' }}>يوصي</option>
+                        <option value="no"  {{ ($reviewFilters['recommend'] ?? '') === 'no'  ? 'selected' : '' }}>لا يوصي</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-500 mb-1.5">مستوى الصعوبة</label>
+                    <select name="difficulty"
+                        class="w-full px-3.5 py-2.5 rounded-2xl border-2 border-slate-200 focus:outline-none focus:border-[#2691C2] text-sm text-slate-900 bg-white transition-colors">
+                        <option value="">جميع المستويات</option>
+                        <option value="سهل"   {{ ($reviewFilters['difficulty'] ?? '') === 'سهل'   ? 'selected' : '' }}>سهل</option>
+                        <option value="متوسط" {{ ($reviewFilters['difficulty'] ?? '') === 'متوسط' ? 'selected' : '' }}>متوسط</option>
+                        <option value="صعب"   {{ ($reviewFilters['difficulty'] ?? '') === 'صعب'   ? 'selected' : '' }}>صعب</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-500 mb-1.5">من تاريخ</label>
+                    <input type="date" name="date_from" value="{{ $reviewFilters['date_from'] ?? '' }}"
+                        class="w-full px-3 py-2.5 rounded-2xl border-2 border-slate-200 focus:outline-none focus:border-[#2691C2] text-sm text-slate-900 transition-colors">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-500 mb-1.5">إلى تاريخ</label>
+                    <input type="date" name="date_to" value="{{ $reviewFilters['date_to'] ?? '' }}"
+                        class="w-full px-3 py-2.5 rounded-2xl border-2 border-slate-200 focus:outline-none focus:border-[#2691C2] text-sm text-slate-900 transition-colors">
+                </div>
             </div>
-            <div>
-                <label class="block text-xs font-bold text-slate-500 mb-1.5">البريد الإلكتروني</label>
-                <input type="text" name="email" value="{{ $reviewFilters['email'] ?? '' }}"
-                    placeholder="ابحث بالبريد..."
-                    class="w-full px-3.5 py-2.5 rounded-2xl border-2 border-slate-200 focus:outline-none focus:border-[#2691C2] text-sm text-slate-900 placeholder-slate-400 transition-colors">
+            <div class="flex gap-2 mt-4 pt-4 border-t border-slate-100">
+                <button type="submit"
+                    class="flex items-center gap-1.5 text-white text-sm font-bold px-5 py-2.5 rounded-2xl transition-all hover:opacity-90"
+                    style="background: linear-gradient(135deg, #2691C2, #22334A);">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                    </svg>
+                    بحث
+                </button>
+                <a href="{{ route('admin.campaigns.reviews', $campaign) }}"
+                   class="flex items-center gap-1.5 bg-white border-2 border-slate-200 text-slate-600 text-sm font-bold px-5 py-2.5 rounded-2xl transition-all hover:border-slate-300">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                    </svg>
+                    إعادة تعيين
+                </a>
             </div>
-            <div>
-                <label class="block text-xs font-bold text-slate-500 mb-1.5">التقييم</label>
-                <select name="rating"
-                    class="w-full px-3.5 py-2.5 rounded-2xl border-2 border-slate-200 focus:outline-none focus:border-[#2691C2] text-sm text-slate-900 bg-white transition-colors">
-                    <option value="">جميع التقييمات</option>
-                    @for($i = 5; $i >= 1; $i--)
-                    <option value="{{ $i }}" {{ ($reviewFilters['rating'] ?? '') == $i ? 'selected' : '' }}>{{ $i }} نجوم</option>
-                    @endfor
-                </select>
-            </div>
-            <div>
-                <label class="block text-xs font-bold text-slate-500 mb-1.5">يوصي بالدورة</label>
-                <select name="recommend"
-                    class="w-full px-3.5 py-2.5 rounded-2xl border-2 border-slate-200 focus:outline-none focus:border-[#2691C2] text-sm text-slate-900 bg-white transition-colors">
-                    <option value="">الكل</option>
-                    <option value="yes" {{ ($reviewFilters['recommend'] ?? '') === 'yes' ? 'selected' : '' }}>يوصي</option>
-                    <option value="no"  {{ ($reviewFilters['recommend'] ?? '') === 'no'  ? 'selected' : '' }}>لا يوصي</option>
-                </select>
-            </div>
-            <div>
-                <label class="block text-xs font-bold text-slate-500 mb-1.5">مستوى الصعوبة</label>
-                <select name="difficulty"
-                    class="w-full px-3.5 py-2.5 rounded-2xl border-2 border-slate-200 focus:outline-none focus:border-[#2691C2] text-sm text-slate-900 bg-white transition-colors">
-                    <option value="">جميع المستويات</option>
-                    <option value="سهل"   {{ ($reviewFilters['difficulty'] ?? '') === 'سهل'   ? 'selected' : '' }}>سهل</option>
-                    <option value="متوسط" {{ ($reviewFilters['difficulty'] ?? '') === 'متوسط' ? 'selected' : '' }}>متوسط</option>
-                    <option value="صعب"   {{ ($reviewFilters['difficulty'] ?? '') === 'صعب'   ? 'selected' : '' }}>صعب</option>
-                </select>
-            </div>
-            <div>
-                <label class="block text-xs font-bold text-slate-500 mb-1.5">من تاريخ</label>
-                <input type="date" name="date_from" value="{{ $reviewFilters['date_from'] ?? '' }}"
-                    class="w-full px-3 py-2.5 rounded-2xl border-2 border-slate-200 focus:outline-none focus:border-[#2691C2] text-sm text-slate-900 transition-colors">
-            </div>
-            <div>
-                <label class="block text-xs font-bold text-slate-500 mb-1.5">إلى تاريخ</label>
-                <input type="date" name="date_to" value="{{ $reviewFilters['date_to'] ?? '' }}"
-                    class="w-full px-3 py-2.5 rounded-2xl border-2 border-slate-200 focus:outline-none focus:border-[#2691C2] text-sm text-slate-900 transition-colors">
-            </div>
-        </div>
-        <div class="flex gap-2 mt-4 pt-4 border-t border-slate-100">
-            <button type="submit"
-                class="flex items-center gap-1.5 text-white text-sm font-bold px-5 py-2.5 rounded-2xl transition-all hover:opacity-90"
-                style="background: linear-gradient(135deg, #2691C2, #22334A);">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
-                </svg>
-                بحث
-            </button>
-            @if(array_filter($reviewFilters))
-            <a href="{{ route('admin.campaigns.reviews', $campaign) }}"
-               class="flex items-center gap-1.5 bg-white border-2 border-slate-200 text-slate-600 text-sm font-bold px-5 py-2.5 rounded-2xl transition-all hover:border-slate-300">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-                </svg>
-                إعادة تعيين
-            </a>
-            @endif
-        </div>
-    </form>
+        </form>
+    </div>
 
     {{-- Reviews --}}
     @if($reviews->isEmpty())
