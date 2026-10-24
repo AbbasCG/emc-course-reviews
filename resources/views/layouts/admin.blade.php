@@ -15,6 +15,7 @@
     @vite(['resources/css/app.css', 'resources/js/app.js'])
     <style>
         html, body { overflow-x: hidden; }
+        [x-cloak] { display: none !important; }
 
         /* ─── CSS Variable Theme System ─── */
         :root {

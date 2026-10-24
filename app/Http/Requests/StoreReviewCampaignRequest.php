@@ -16,6 +16,8 @@ class StoreReviewCampaignRequest extends FormRequest
         return [
             'course_name'       => 'required|string|max:255',
             'instructor_name'   => 'nullable|string|max:255',
+            'activity_type'     => 'nullable|string|max:100',
+            'activity_type_custom' => 'nullable|required_if:activity_type,other|string|max:100',
             'course_date'       => 'nullable|date',
             'description'       => 'nullable|string',
             'theme'             => 'nullable|string|in:default,ai,business,data',
@@ -32,6 +34,8 @@ class StoreReviewCampaignRequest extends FormRequest
             'course_name.max'             => 'اسم الدورة يجب ألا يتجاوز 255 حرف',
             'instructor_name.string'      => 'اسم المدرب يجب أن يكون نصاً',
             'instructor_name.max'         => 'اسم المدرب يجب ألا يتجاوز 255 حرف',
+            'activity_type_custom.required_if' => 'اكتب نوع النشاط المخصص',
+            'activity_type_custom.max'   => 'نوع النشاط يجب ألا يتجاوز 100 حرف',
             'course_date.date'            => 'تاريخ الدورة يجب أن يكون تاريخاً صحيحاً',
             'description.string'          => 'الوصف يجب أن يكون نصاً',
             'expires_custom_date.date'    => 'تاريخ الانتهاء يجب أن يكون تاريخاً صحيحاً',

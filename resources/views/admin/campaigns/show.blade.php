@@ -69,6 +69,14 @@
     </svg>
     <span class="hidden sm:inline">CSV</span>
 </a>
+@can('export-reviews')
+<a href="{{ route('admin.exports.index', ['campaign' => $campaign->id]) }}" class="nav-btn" title="تصدير متقدم">
+    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"/>
+    </svg>
+    <span class="hidden sm:inline">تصدير متقدم</span>
+</a>
+@endcan
 @endsection
 
 @push('head')
@@ -217,7 +225,7 @@
     <div style="position:absolute;top:-80px;right:-40px;width:400px;height:400px;background:radial-gradient(circle,rgba(38,145,194,0.1) 0%,transparent 65%);pointer-events:none;"></div>
     <div style="position:absolute;bottom:-100px;left:5%;width:300px;height:300px;background:radial-gradient(circle,rgba(236,148,60,0.06) 0%,transparent 70%);pointer-events:none;"></div>
 
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 pt-10 sm:pt-14 pb-8 sm:pb-10 relative">
+    <div class="max-w-7xl mx-auto px-4 mt-10 mb-10 sm:px-6 pt-10 sm:pt-14 pb-8 sm:pb-10 relative">
         <a href="{{ route('admin.dashboard') }}"
            class="hero-link inline-flex items-center gap-1.5 text-white/60 hover:text-white text-sm font-semibold mb-6 transition-colors">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -561,7 +569,7 @@
                         <input type="date" name="date_to" value="{{ $reviewFilters['date_to'] ?? '' }}" class="f-input">
                     </div>
                 </div>
-                <div class="flex gap-2 mt-4 pt-4" style="border-top:1px solid var(--pg-border);">
+                <div class="flex gap-2 mb-4 mt-4 pt-4" style="border-top:1px solid var(--pg-border);">
                     <button type="submit"
                         class="flex items-center gap-1.5 text-white text-sm font-bold px-5 py-2.5 rounded-xl hover:opacity-90 transition-all"
                         style="background:linear-gradient(135deg,#2691C2,#1a4f6e);">

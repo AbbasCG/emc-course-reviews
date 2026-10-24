@@ -2,6 +2,7 @@
 
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\AdminController;
+use App\Http\Controllers\ExportController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\ReviewController;
 use App\Http\Controllers\AuthController;
@@ -29,6 +30,17 @@ Route::prefix('admin')->name('admin.')->middleware('auth')->group(function () {
     Route::get('/review-campaigns/{campaign}/reviews', [AdminController::class, 'showCampaignReviews'])->name('campaigns.reviews');
     Route::get('/review-campaigns/{campaign}/export-csv', [AdminController::class, 'exportCsv'])->name('campaigns.export-csv');
     Route::get('/review-campaigns/{campaign}/export-pdf', [AdminController::class, 'exportPdf'])->name('campaigns.exportPdf');
+
+    Route::middleware('can:export-reviews')->prefix('exports')->name('exports.')->controller(ExportController::class)->group(function () {
+        Route::get('/', 'index')->name('index');
+        Route::post('/preview', 'preview')->name('preview')->middleware('throttle:60,1');
+        Route::post('/', 'store')->name('store')->middleware('throttle:20,1');
+        Route::post('/templates', 'storeTemplate')->name('templates.store');
+        Route::delete('/templates/{template}', 'destroyTemplate')->name('templates.destroy');
+        Route::get('/{export}/status', 'status')->name('status');
+        Route::get('/{export}/download', 'download')->name('download');
+        Route::post('/{export}/regenerate', 'regenerate')->name('regenerate')->middleware('throttle:20,1');
+    });
 
     Route::get('/notifications', [NotificationController::class, 'index'])->name('notifications.index');
     Route::post('/notifications/read-all', [NotificationController::class, 'markAllRead'])->name('notifications.read-all');

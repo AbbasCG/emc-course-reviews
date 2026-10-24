@@ -2,14 +2,18 @@
 
 namespace App\Http\Controllers;
 
+use App\Exports\ExportCriteria;
+use App\Exports\ExportService;
+use App\Exports\ReviewExportColumns;
 use App\Http\Requests\StoreReviewCampaignRequest;
+use App\Models\ExportLog;
 use App\Models\ReviewCampaign;
 use App\Models\CourseReview;
 use Illuminate\Support\Str;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
-use Mpdf\Mpdf;
-use Symfony\Component\HttpFoundation\StreamedResponse;
+use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Storage;
 
 class AdminController extends Controller
 {
@@ -133,6 +137,7 @@ class AdminController extends Controller
         $campaign = ReviewCampaign::create([
             'course_name'     => $request->course_name,
             'instructor_name' => $request->instructor_name,
+            'activity_type'   => $this->resolveActivityType($request),
             'course_date'     => $request->course_date,
             'description'     => $request->description,
             'theme'           => $request->input('theme', 'default'),
@@ -197,6 +202,7 @@ class AdminController extends Controller
         $campaign->update([
             'course_name'     => $request->course_name,
             'instructor_name' => $request->instructor_name,
+            'activity_type'   => $this->resolveActivityType($request, $campaign),
             'course_date'     => $request->course_date,
             'description'     => $request->description,
             'theme'           => $request->input('theme', $campaign->theme),
@@ -253,95 +259,56 @@ class AdminController extends Controller
         return view('admin.campaigns.reviews', compact('campaign', 'reviews', 'reviewFilters'));
     }
 
-    public function exportCsv(ReviewCampaign $campaign): StreamedResponse
+    public function exportCsv(ReviewCampaign $campaign, ExportService $exports)
     {
-        $reviews  = $campaign->reviews()->get();
-        $filename = 'تقييمات_' . $campaign->course_name . '_' . now()->format('Y-m-d') . '.csv';
-
-        $headers = [
-            'Content-Type'        => 'text/csv; charset=UTF-8',
-            'Content-Disposition' => 'attachment; filename="' . $filename . '"',
-        ];
-
-        $callback = function () use ($reviews) {
-            $handle = fopen('php://output', 'w');
-            fputs($handle, "\xEF\xBB\xBF");
-
-            fputcsv($handle, [
-                'اسم الطالب', 'البريد الإلكتروني', 'التقييم العام',
-                'المحتوى', 'المدرب', 'التنظيم', 'مستوى الصعوبة',
-                'يوصي بالدورة', 'ما أعجبه', 'ما يمكن تحسينه',
-                'ملاحظات إضافية', 'تاريخ الإرسال',
-            ]);
-
-            foreach ($reviews as $review) {
-                fputcsv($handle, [
-                    $review->student_name,
-                    $review->email ?? '',
-                    $review->overall_rating,
-                    $review->course_content_rating,
-                    $review->instructor_rating,
-                    $review->organization_rating,
-                    $review->difficulty_level,
-                    $review->would_recommend ? 'نعم' : 'لا',
-                    $review->what_did_you_like,
-                    $review->what_can_be_improved,
-                    $review->additional_notes ?? '',
-                    $review->created_at->format('Y-m-d H:i'),
-                ]);
-            }
-
-            fclose($handle);
-        };
-
-        return response()->stream($callback, 200, $headers);
+        return $this->campaignExport($campaign, $exports, 'detailed', 'csv', 'تقييمات ' . $campaign->course_name);
     }
 
-    public function exportPdf(ReviewCampaign $campaign)
+    public function exportPdf(ReviewCampaign $campaign, ExportService $exports)
     {
-        try {
-            $reviews = $campaign->reviews()->latest()->get();
-            $total   = $reviews->count();
-            $recYes  = $reviews->where('would_recommend', true)->count();
-            $recNo   = $total - $recYes;
+        return $this->campaignExport($campaign, $exports, 'campaign', 'pdf', 'تقرير تقييمات ' . $campaign->course_name);
+    }
 
-            $stats = [
-                'total_reviews'        => $total,
-                'overall_avg'          => $total ? round($reviews->avg('overall_rating'), 1) : 0,
-                'content_avg'          => $total ? round($reviews->avg('course_content_rating'), 1) : 0,
-                'instructor_avg'       => $total ? round($reviews->avg('instructor_rating'), 1) : 0,
-                'organization_avg'     => $total ? round($reviews->avg('organization_rating'), 1) : 0,
-                'recommend_percentage' => $total ? round($recYes / $total * 100) : 0,
-                'recommend_yes'        => $recYes,
-                'recommend_no'         => $recNo,
-                'difficulty_data'      => $reviews->groupBy('difficulty_level')->map->count(),
-            ];
+    /**
+     * Per-campaign quick exports run through the shared export engine so they
+     * get the same Arabic PDF rendering, formula-injection protection and
+     * export history as the Export Wizard.
+     */
+    private function campaignExport(ReviewCampaign $campaign, ExportService $exports, string $type, string $format, string $name)
+    {
+        Gate::authorize('export-reviews');
 
-            $html = view('admin.campaigns.pdf-report', compact('campaign', 'reviews', 'stats'))->render();
-
-            $mpdf = new Mpdf([
-                'mode'             => 'utf-8',
-                'format'           => 'A4',
-                'autoScriptToLang' => true,
-                'autoLangToFont'   => true,
-                'margin_top'       => 0,
-                'margin_bottom'    => 10,
-                'margin_left'      => 0,
-                'margin_right'     => 0,
-            ]);
-
-            $mpdf->SetDirectionality('rtl');
-            $mpdf->WriteHTML($html);
-
-            $filename = 'تقرير-تقييمات-' . $campaign->id . '-' . now()->format('Y-m-d') . '.pdf';
-
-            return response($mpdf->Output($filename, 'S'), 200, [
-                'Content-Type'        => 'application/pdf',
-                'Content-Disposition' => 'attachment; filename="' . $filename . '"',
-            ]);
-        } catch (\Exception $e) {
-            return back()->with('error', 'فشل تصدير PDF: ' . $e->getMessage());
+        $columns = ReviewExportColumns::LEGACY_CAMPAIGN_CSV;
+        if (Gate::denies('export-personal-data')) {
+            $columns = array_diff($columns, ReviewExportColumns::piiKeys());
         }
+
+        $log = $exports->run($exports->createLog(request()->user(), ExportCriteria::fromArray([
+            'report_type'    => $type,
+            'format'         => $format,
+            'campaign_scope' => 'selected',
+            'campaign_ids'   => [$campaign->id],
+            'columns'        => $columns,
+            'name'           => $name,
+        ])));
+
+        if ($log->status !== ExportLog::STATUS_COMPLETED) {
+            return back()->with('error', 'فشل التصدير: ' . $log->error);
+        }
+
+        return Storage::disk(config('exports.disk'))->download($log->file_path, $log->downloadName(), [
+            'Cache-Control' => 'no-store, private',
+        ]);
+    }
+
+    private function resolveActivityType(StoreReviewCampaignRequest $request, ?ReviewCampaign $existing = null): string
+    {
+        $type = $request->input('activity_type');
+        if ($type === 'other') {
+            return trim((string) $request->input('activity_type_custom')) ?: ($existing?->activity_type ?? 'course');
+        }
+
+        return $type ?: ($existing?->activity_type ?? 'course');
     }
 
     private function computeExpiresAt(StoreReviewCampaignRequest $request, ?ReviewCampaign $existing = null): ?Carbon

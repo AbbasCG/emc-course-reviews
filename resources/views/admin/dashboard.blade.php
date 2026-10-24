@@ -260,6 +260,14 @@
         <span class="hidden sm:inline" x-text="syncing ? 'جارٍ...' : 'مزامنة'">مزامنة</span>
     </button>
 </div>
+@can('export-reviews')
+<a href="{{ route('admin.exports.index') }}" class="nav-btn" title="تصدير البيانات">
+    <svg class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+    </svg>
+    <span class="hidden sm:inline">تصدير البيانات</span>
+</a>
+@endcan
 <a href="{{ route('admin.campaigns.create') }}" class="nav-btn nav-btn-primary">
     <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"/>
@@ -282,7 +290,7 @@
     {{-- Orange accent glow (bottom-left) --}}
     <div style="position:absolute;bottom:-120px;left:5%;width:360px;height:360px;background:radial-gradient(circle,rgba(236,148,60,0.06) 0%,transparent 70%);pointer-events:none;"></div>
 
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 pt-12 sm:pt-16 pb-10 sm:pb-12 relative">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 pt-12 sm:pt-16 pb-12 sm:pb-12 relative">
         <div class="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-8 lg:gap-12">
 
             {{-- Left: Title block --}}
@@ -421,7 +429,7 @@
                         </div>
                     </div>
                 </div>
-                <div class="flex gap-2 mt-4 pt-4" style="border-top:1px solid rgba(38,145,194,0.08);">
+                <div class="flex gap-2 mb-4 mt-4 pt-4" style="border-top:1px solid rgba(38,145,194,0.08);">
                     <button type="submit"
                             class="flex items-center gap-1.5 text-white text-sm font-bold px-5 py-2.5 rounded-xl transition-all hover:opacity-90"
                             style="background:linear-gradient(135deg,#2691C2,#1a4f6e);">

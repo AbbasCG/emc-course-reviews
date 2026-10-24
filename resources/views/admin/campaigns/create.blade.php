@@ -78,6 +78,27 @@
                 @enderror
             </div>
 
+            {{-- Activity Type --}}
+            @php $__activityType = old('activity_type', 'course'); @endphp
+            <div x-data="{ type: @js($__activityType) }">
+                <label for="activity_type" class="block text-sm font-bold text-slate-700 mb-2">
+                    نوع النشاط
+                </label>
+                <select id="activity_type" name="activity_type" x-model="type"
+                    class="w-full px-4 py-3.5 rounded-2xl border-2 border-slate-200 focus:outline-none focus:border-[#2691C2] transition-colors text-slate-900 bg-white">
+                    @foreach(\App\Models\ReviewCampaign::ACTIVITY_TYPES as $key => $label)
+                    <option value="{{ $key }}" @selected($__activityType === $key)>{{ $label }}</option>
+                    @endforeach
+                    <option value="other" @selected($__activityType === 'other')>نوع مخصص…</option>
+                </select>
+                <input type="text" name="activity_type_custom" x-show="type === 'other'" x-cloak
+                    value="{{ old('activity_type_custom') }}"
+                    placeholder="مثال: ندوة، معسكر تدريبي"
+                    class="w-full mt-2 px-4 py-3.5 rounded-2xl border-2 border-slate-200 focus:outline-none focus:border-[#2691C2] transition-colors text-slate-900 placeholder-slate-400">
+                @error('activity_type_custom')
+                <p class="text-red-500 text-xs mt-1.5 font-medium">{{ $message }}</p>
+                @enderror
+            </div>
             {{-- Course Date --}}
             <div>
                 <label for="course_date" class="block text-sm font-bold text-slate-700 mb-2">

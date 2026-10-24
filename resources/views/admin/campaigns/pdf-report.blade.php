@@ -7,7 +7,7 @@
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
 body {
-    font-family: dejavusans, sans-serif;
+    font-family: cairo, sans-serif;
     direction: rtl;
     text-align: right;
     color: #1e293b;
@@ -40,7 +40,6 @@ body {
 .campaign-eyebrow {
     font-size: 9px;
     color: #94a3b8;
-    letter-spacing: 1px;
     display: block;
     margin-bottom: 5px;
 }
@@ -75,7 +74,6 @@ body {
     display: block;
     margin-top: 6px;
     font-weight: bold;
-    letter-spacing: 0.5px;
 }
 
 /* ─── ACCENT BAR ─── */
@@ -124,7 +122,7 @@ body {
 .stat-orange { border-top-color: #EC943C !important; }
 .stat-green  { border-top-color: #22c55e !important; }
 .stat-num    { font-size: 22px; font-weight: bold; color: #22334A; display: block; line-height: 1.15; }
-.stat-star   { color: #EC943C; font-size: 14px; font-weight: bold; }
+.stat-star   { font-family: emcstars; color: #EC943C; font-size: 14px; font-weight: bold; }
 .stat-pct    { color: #22c55e; font-size: 15px; font-weight: bold; }
 .stat-cap    { font-size: 8.5px; color: #64748b; display: block; margin-top: 3px; }
 
@@ -152,8 +150,8 @@ body {
 .rating-section { margin-bottom: 20px; }
 .rt-row { width: 100%; border-collapse: collapse; margin-bottom: 6px; }
 .rt-row td { vertical-align: middle; padding: 2px 4px; }
-.rt-name  { width: 26%; font-size: 10.5px; color: #374151; font-weight: 600; }
-.rt-stars { width: 15%; font-size: 13px; color: #EC943C; white-space: nowrap; letter-spacing: -1px; }
+.rt-name  { width: 26%; font-size: 10.5px; color: #374151; font-weight: bold; }
+.rt-stars { width: 15%; font-family: emcstars; font-size: 13px; color: #EC943C; white-space: nowrap; letter-spacing: -1px; }
 .rt-bar   { }
 .rt-bg    { background-color: #e8ecf0; height: 8px; border-radius: 4px; }
 .rt-fill  { height: 8px; border-radius: 4px; display: block; }
@@ -208,7 +206,7 @@ body {
     color: #374151;
 }
 .reviews-table tr:nth-child(even) td { background-color: #f8fafc; }
-.rv-stars  { color: #EC943C; font-size: 11px; letter-spacing: -1px; }
+.rv-stars  { font-family: emcstars; color: #EC943C; font-size: 11px; letter-spacing: -1px; }
 .rv-badge-y { background-color: #dcfce7; color: #15803d; padding: 1px 5px; border-radius: 7px; font-size: 8.5px; font-weight: bold; }
 .rv-badge-n { background-color: #fee2e2; color: #dc2626; padding: 1px 5px; border-radius: 7px; font-size: 8.5px; font-weight: bold; }
 
@@ -240,8 +238,8 @@ body {
                 @endif
             </td>
             <td class="header-right">
-                @php $logoPath = public_path('assets/logo/emclogo.png'); @endphp
-                @if(file_exists($logoPath))
+                @php $logoPath = \App\Exports\Writers\PdfFactory::logoPath(); @endphp
+                @if($logoPath)
                 <img src="data:image/png;base64,{{ base64_encode(file_get_contents($logoPath)) }}"
                      style="width:55px;height:auto;display:block;margin-bottom:6px;margin-left:auto;">
                 @else
@@ -259,13 +257,13 @@ body {
 <div class="meta-row">
     <table class="meta-table">
         <tr>
-            <td>تاريخ التقرير:&nbsp;<span class="meta-val">{{ now()->format('d / m / Y') }}</span></td>
+            <td>تاريخ التقرير:&nbsp;<span class="meta-val">{!! \App\Exports\Writers\PdfFactory::ltr(now()->format('d/m/Y')) !!}</span></td>
             @if($campaign->course_date)
-            <td>تاريخ الدورة:&nbsp;<span class="meta-val">{{ $campaign->course_date->format('d / m / Y') }}</span></td>
+            <td>تاريخ الدورة:&nbsp;<span class="meta-val">{!! \App\Exports\Writers\PdfFactory::ltr($campaign->course_date->format('d/m/Y')) !!}</span></td>
             @endif
             <td>إجمالي التقييمات:&nbsp;<span class="meta-val">{{ $stats['total_reviews'] }}</span></td>
             @if($campaign->expires_at)
-            <td>الصلاحية:&nbsp;<span class="meta-val">{{ $campaign->expires_at->format('d / m / Y') }}</span></td>
+            <td>الصلاحية:&nbsp;<span class="meta-val">{!! \App\Exports\Writers\PdfFactory::ltr($campaign->expires_at->format('d/m/Y')) !!}</span></td>
             @endif
         </tr>
     </table>
@@ -298,7 +296,7 @@ body {
             <span class="stat-cap">التنظيم</span>
         </td>
         <td class="stat-green">
-            <span class="stat-num"><span class="stat-pct">{{ $stats['recommend_percentage'] }}%</span></span>
+            <span class="stat-num"><span class="stat-pct">{!! \App\Exports\Writers\PdfFactory::ltr($stats['recommend_percentage'] . '%') !!}</span></span>
             <span class="stat-cap">نسبة التوصية</span>
         </td>
     </tr>
@@ -315,13 +313,13 @@ body {
     </tr>
     <tr>
         <td class="lbl-cell">تاريخ الدورة</td>
-        <td class="val-cell">{{ $campaign->course_date ? $campaign->course_date->format('d / m / Y') : '—' }}</td>
+        <td class="val-cell">{!! $campaign->course_date ? \App\Exports\Writers\PdfFactory::ltr($campaign->course_date->format('d/m/Y')) : '—' !!}</td>
         <td class="lbl-cell">تاريخ الإنشاء</td>
-        <td class="val-cell">{{ $campaign->created_at->format('d / m / Y') }}</td>
+        <td class="val-cell">{!! \App\Exports\Writers\PdfFactory::ltr($campaign->created_at->format('d/m/Y')) !!}</td>
     </tr>
     <tr>
         <td class="lbl-cell">انتهاء الصلاحية</td>
-        <td class="val-cell">{{ $campaign->expires_at ? $campaign->expires_at->format('d / m / Y') : 'بدون انتهاء' }}</td>
+        <td class="val-cell">{!! $campaign->expires_at ? \App\Exports\Writers\PdfFactory::ltr($campaign->expires_at->format('d/m/Y')) : 'بدون انتهاء' !!}</td>
         <td class="lbl-cell">الحالة</td>
         <td class="val-cell">
             @if($campaign->isAvailable())
@@ -368,7 +366,7 @@ $ratings = [
                 <span class="rt-fill" style="width:{{ ($val / 5) * 100 }}%; background-color:{{ $clr }};"></span>
             </div>
         </td>
-        <td class="rt-score">{{ $val }} / 5</td>
+        <td class="rt-score">{!! \App\Exports\Writers\PdfFactory::ltr($val . '/5') !!}</td>
     </tr>
 </table>
 @endforeach
@@ -380,15 +378,15 @@ $ratings = [
     <table class="rec-table">
         <tr>
             <td style="width:145px;">
-                <span class="badge-yes">يوصون: {{ $stats['recommend_percentage'] }}%</span>
+                <span class="badge-yes">يوصون: {!! \App\Exports\Writers\PdfFactory::ltr($stats['recommend_percentage'] . '%') !!}</span>
             </td>
             <td>
                 <div class="rec-bar-bg">
-                    <span class="rec-bar-fill" style="width:{{ $stats['recommend_percentage'] }}%;"></span>
+                    <span class="rec-bar-fill" style="width:{!! \App\Exports\Writers\PdfFactory::ltr($stats['recommend_percentage'] . '%') !!};"></span>
                 </div>
             </td>
             <td style="width:145px; text-align:left; padding-right:8px;">
-                <span class="badge-no">لا يوصون: {{ 100 - $stats['recommend_percentage'] }}%</span>
+                <span class="badge-no">لا يوصون: {!! \App\Exports\Writers\PdfFactory::ltr((100 - $stats['recommend_percentage']) . '%') !!}</span>
             </td>
         </tr>
     </table>
@@ -407,7 +405,7 @@ $ratings = [
     <tr>
         <td>{{ $level }}</td>
         <td>{{ $cnt }}</td>
-        <td>{{ round($cnt / $stats['total_reviews'] * 100) }}%</td>
+        <td>{!! \App\Exports\Writers\PdfFactory::ltr(round($cnt / $stats['total_reviews'] * 100) . '%') !!}</td>
     </tr>
     @endforeach
 </table>
@@ -433,15 +431,19 @@ $ratings = [
     @endphp
     <tr>
         <td>
+            @if($showPii ?? true)
             <strong>{{ $review->student_name }}</strong>
             @if($review->email)
-            <br><span style="font-size:8px;color:#94a3b8;">{{ $review->email }}</span>
+            <br><span style="font-size:8px;color:#94a3b8;">{!! \App\Exports\Writers\PdfFactory::ltr($review->email) !!}</span>
             @endif
-            <br><span style="font-size:8px;color:#94a3b8;">{{ $review->created_at->format('d/m/Y') }}</span>
+            @else
+            <strong>مشارك #{{ $review->id }}</strong>
+            @endif
+            <br><span style="font-size:8px;color:#94a3b8;">{!! \App\Exports\Writers\PdfFactory::ltr($review->created_at->format('d/m/Y')) !!}</span>
         </td>
         <td style="text-align:center;">
             <span class="rv-stars">{{ $rStars }}</span><br>
-            <span style="font-size:9.5px;font-weight:bold;color:#22334A;">{{ $review->overall_rating }}/5</span>
+            <span style="font-size:9.5px;font-weight:bold;color:#22334A;">{!! \App\Exports\Writers\PdfFactory::ltr($review->overall_rating . '/5') !!}</span>
         </td>
         <td style="text-align:center;">
             @if($review->would_recommend)
@@ -470,7 +472,7 @@ $ratings = [
 <div class="page-footer">
     <table class="footer-table">
         <tr>
-            <td>تقرير صادر بواسطة نظام تقييمات EMC &nbsp;|&nbsp; {{ now()->format('d/m/Y H:i') }}</td>
+            <td>تقرير صادر بواسطة نظام تقييمات EMC &nbsp;|&nbsp; {!! \App\Exports\Writers\PdfFactory::ltr(now()->format('d/m/Y H:i')) !!}</td>
             <td class="footer-brand">EMC</td>
         </tr>
     </table>
