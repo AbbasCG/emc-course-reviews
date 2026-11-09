@@ -3,10 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\StoreReviewRequest;
-use App\Models\AdminNotification;
 use App\Models\ReviewCampaign;
-use App\Models\CourseReview;
-use Illuminate\Database\QueryException;
+use App\Services\ReviewSubmitter;
 
 class ReviewController extends Controller
 {
@@ -25,7 +23,7 @@ class ReviewController extends Controller
         return view('review.show', compact('campaign'));
     }
 
-    public function store(StoreReviewRequest $request, string $token)
+    public function store(StoreReviewRequest $request, string $token, ReviewSubmitter $submitter)
     {
         $campaign = ReviewCampaign::where('token', $token)->firstOrFail();
 
@@ -41,42 +39,24 @@ class ReviewController extends Controller
             ], 422);
         }
 
-        if ($request->email) {
-            $existingReview = CourseReview::where('review_campaign_id', $campaign->id)
-                ->where('email', $request->email)
-                ->exists();
+        $outcome = $submitter->submit($campaign, $request->validated(), $request->session()->getId());
 
-            if ($existingReview) {
-                return response()->json([
-                    'errors' => ['email' => ['لقد قمت بتقديم تقييم من قبل باستخدام هذا البريد الإلكتروني']]
-                ], 422);
-            }
-        }
+        return match ($outcome) {
+            ReviewSubmitter::CREATED,
+            ReviewSubmitter::REPLAYED => response()->json(['redirect' => route('review.success', $token)]),
 
-        try {
-            $review = $campaign->reviews()->create($request->validated());
+            ReviewSubmitter::DUPLICATE_EMAIL => response()->json([
+                'errors' => ['email' => ['لقد قمت بتقديم تقييم من قبل باستخدام هذا البريد الإلكتروني']]
+            ], 422),
 
-            AdminNotification::create([
-                'type'    => 'review',
-                'title'   => 'تم استلام تقييم جديد',
-                'message' => 'تم استلام تقييم جديد لدورة: ' . $campaign->course_name,
-                'data'    => [
-                    'campaign_id'  => $campaign->id,
-                    'review_id'    => $review->id,
-                    'student_name' => $request->student_name,
-                    'rating'       => $request->overall_rating,
-                ],
-            ]);
+            ReviewSubmitter::IN_FLIGHT => response()->json([
+                'message' => 'جارٍ معالجة تقييمك، يرجى الانتظار لحظات.'
+            ], 409),
 
-            return response()->json(['redirect' => route('review.success', $token)]);
-        } catch (QueryException $e) {
-            if ($request->email && str_contains($e->getMessage(), 'unique_review_per_email_campaign')) {
-                return response()->json([
-                    'errors' => ['email' => ['لقد قمت بتقديم تقييم من قبل باستخدام هذا البريد الإلكتروني']]
-                ], 422);
-            }
-            return response()->json(['message' => 'حدث خطأ في تقديم التقييم. يرجى المحاولة مرة أخرى.'], 500);
-        }
+            default => response()->json([
+                'message' => 'حدث خطأ في تقديم التقييم. يرجى المحاولة مرة أخرى.'
+            ], 500),
+        };
     }
 
     public function success(string $token)
