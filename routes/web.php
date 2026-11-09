@@ -2,6 +2,7 @@
 
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\AdminController;
+use App\Http\Controllers\DiagnosticsController;
 use App\Http\Controllers\ExportController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\ReviewController;
@@ -42,6 +43,8 @@ Route::prefix('admin')->name('admin.')->middleware('auth')->group(function () {
         Route::post('/{export}/regenerate', 'regenerate')->name('regenerate')->middleware('throttle:20,1');
     });
 
+    Route::get('/diagnostics/client-ip', [DiagnosticsController::class, 'clientIp'])->name('diagnostics.client-ip');
+
     Route::get('/notifications', [NotificationController::class, 'index'])->name('notifications.index');
     Route::post('/notifications/read-all', [NotificationController::class, 'markAllRead'])->name('notifications.read-all');
     Route::get('/notifications/{notification}/open', [NotificationController::class, 'open'])->name('notifications.open');
@@ -51,7 +54,7 @@ Route::prefix('admin')->name('admin.')->middleware('auth')->group(function () {
 // Root redirect
 Route::get('/', fn() => redirect()->route('admin.dashboard'));
 
-// Student Review Routes (public) — throttle: 5 attempts per minute per IP
+// Student Review Routes (public) — rate limit: the 'review-submit' limiter (AppServiceProvider, config/ratelimits.php)
 Route::get('/review/{token}', [ReviewController::class, 'show'])->name('review.show');
-Route::post('/review/{token}', [ReviewController::class, 'store'])->name('review.store')->middleware('throttle:5,1');
+Route::post('/review/{token}', [ReviewController::class, 'store'])->name('review.store')->middleware('throttle:review-submit');
 Route::get('/review/{token}/success', [ReviewController::class, 'success'])->name('review.success');
