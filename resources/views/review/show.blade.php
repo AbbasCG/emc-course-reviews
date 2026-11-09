@@ -575,6 +575,9 @@ function reviewForm() {
                     else this.globalError = 'يرجى التحقق من البيانات المدخلة.';
                 } else if (response.status === 429) {
                     this.globalError = 'يرجى الانتظار قليلًا قبل المحاولة مرة أخرى.';
+                } else if (response.status === 409) {
+                    const data = await response.json().catch(() => ({}));
+                    this.globalError = data.message || 'جارٍ معالجة تقييمك، يرجى الانتظار لحظات.';
                 } else {
                     this.globalError = 'حدث خطأ في الإرسال. يرجى المحاولة مرة أخرى.';
                 }
