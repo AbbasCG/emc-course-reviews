@@ -503,7 +503,7 @@
                         @if($campaigns->isNotEmpty())
                         <span class="text-[10px] font-medium px-2.5 py-1 rounded-full"
                               style="background:var(--pg-border);color:var(--pg-text-3);border:1px solid var(--pg-border-2);">
-                            {{ $campaigns->count() }} {{ $campaigns->count() === 1 ? 'حملة' : 'حملات' }}
+                            {{ $campaigns->total() }} {{ $campaigns->total() === 1 ? 'حملة' : 'حملات' }}
                         </span>
                         @endif
                     </div>
@@ -642,6 +642,11 @@
                             </tbody>
                         </table>
                     </div>
+                    @if($campaigns->hasPages())
+                    <div class="px-5 py-4" style="border-top:1px solid rgba(38,145,194,0.1);">
+                        {{ $campaigns->links('pagination::tailwind') }}
+                    </div>
+                    @endif
                     @endif
                 </div>
             </div>

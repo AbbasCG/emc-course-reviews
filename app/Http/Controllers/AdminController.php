@@ -12,21 +12,70 @@ use App\Models\CourseReview;
 use Illuminate\Support\Str;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Storage;
 
 class AdminController extends Controller
 {
+    /** Dashboard campaign table page size (the list used to be unbounded). */
+    private const CAMPAIGNS_PER_PAGE = 25;
+
     public function dashboard(Request $request)
     {
-        $totalCampaigns = ReviewCampaign::count();
-        $totalReviews   = CourseReview::count();
-        $averageRating  = round(CourseReview::avg('overall_rating') ?? 0, 2);
-        $latestReviews  = CourseReview::latest()->take(5)->with('campaign')->get();
+        $now = now();
 
+        // ── Campaign counters: one pass instead of five queries ──
+        $campaignStats = ReviewCampaign::query()->toBase()->selectRaw(
+            'COUNT(*) AS total,
+             SUM(CASE WHEN is_active = 1 AND (expires_at IS NULL OR expires_at > ?) THEN 1 ELSE 0 END) AS active,
+             SUM(CASE WHEN is_active = 0 THEN 1 ELSE 0 END) AS inactive,
+             SUM(CASE WHEN expires_at IS NOT NULL AND expires_at < ? THEN 1 ELSE 0 END) AS expired,
+             SUM(CASE WHEN is_active = 1 AND expires_at IS NOT NULL AND expires_at >= ? AND expires_at <= ? THEN 1 ELSE 0 END) AS expiring_soon',
+            [$now, $now, $now, $now->copy()->addDays(7)]
+        )->first();
+
+        $totalCampaigns    = (int) $campaignStats->total;
+        $activeCampaigns   = (int) $campaignStats->active;
+        $inactiveCampaigns = (int) $campaignStats->inactive;
+        $expiredCampaigns  = (int) $campaignStats->expired;
+        $expiringSoonCount = (int) $campaignStats->expiring_soon;
+
+        // ── Review totals, recommendation split and star breakdown: one pass instead of ten queries ──
+        $reviewStats = CourseReview::query()->toBase()->selectRaw(
+            'COUNT(*) AS total,
+             AVG(overall_rating) AS avg_rating,
+             SUM(CASE WHEN would_recommend = 1 THEN 1 ELSE 0 END) AS recommend_yes,
+             SUM(CASE WHEN would_recommend = 0 THEN 1 ELSE 0 END) AS recommend_no,
+             SUM(CASE WHEN overall_rating = 5 THEN 1 ELSE 0 END) AS star_5,
+             SUM(CASE WHEN overall_rating = 4 THEN 1 ELSE 0 END) AS star_4,
+             SUM(CASE WHEN overall_rating = 3 THEN 1 ELSE 0 END) AS star_3,
+             SUM(CASE WHEN overall_rating = 2 THEN 1 ELSE 0 END) AS star_2,
+             SUM(CASE WHEN overall_rating = 1 THEN 1 ELSE 0 END) AS star_1'
+        )->first();
+
+        $totalReviews  = (int) $reviewStats->total;
+        $averageRating = round((float) ($reviewStats->avg_rating ?? 0), 2);
+        $recommendYes  = (int) $reviewStats->recommend_yes;
+        $recommendNo   = (int) $reviewStats->recommend_no;
+        $globalRecommendPct = $totalReviews > 0 ? round($recommendYes / $totalReviews * 100) : 0;
+
+        // ── Rating breakdown (5 → 1) ──
+        $ratingBreakdown = collect([5, 4, 3, 2, 1])->mapWithKeys(
+            fn ($s) => [$s => (int) $reviewStats->{'star_' . $s}]
+        );
+
+        $difficultyRaw = CourseReview::selectRaw('difficulty_level, COUNT(*) as count')
+            ->groupBy('difficulty_level')
+            ->pluck('count', 'difficulty_level');
+
+        $latestReviews = CourseReview::latest()->take(5)->with('campaign')->get();
+
+        // ── Campaign list (paginated; counts/averages are computed for the visible page only) ──
         $query = ReviewCampaign::withCount('reviews')
                                ->withAvg('reviews', 'overall_rating')
-                               ->latest();
+                               ->latest()
+                               ->orderBy('id'); // same-second ties keep the order they always had (oldest id first)
 
         if ($request->filled('course_name')) {
             $query->where('course_name', 'like', '%' . $request->course_name . '%');
@@ -36,36 +85,45 @@ class AdminController extends Controller
         }
         $filterStatus = $request->input('status', 'all');
         if ($filterStatus === 'active') {
-            $query->where('is_active', 1)->where(function ($q) {
-                $q->whereNull('expires_at')->orWhere('expires_at', '>', now());
+            $query->where('is_active', 1)->where(function ($q) use ($now) {
+                $q->whereNull('expires_at')->orWhere('expires_at', '>', $now);
             });
         } elseif ($filterStatus === 'inactive') {
             $query->where('is_active', 0);
         } elseif ($filterStatus === 'expired') {
-            $query->where('expires_at', '<', now());
+            $query->where('expires_at', '<', $now);
         }
-        if ($request->filled('date_from')) {
-            $query->whereDate('created_at', '>=', $request->date_from);
-        }
-        if ($request->filled('date_to')) {
-            $query->whereDate('created_at', '<=', $request->date_to);
-        }
+        $this->applyCreatedAtRange($query, $request);
 
-        $campaigns = $query->get();
+        $campaigns = $query->paginate(self::CAMPAIGNS_PER_PAGE)->withQueryString();
+
+        // A stale link / bookmark past the last page must not show the "no campaigns yet" empty state.
+        if ($campaigns->isEmpty() && $campaigns->currentPage() > 1) {
+            return redirect()->to($campaigns->url($campaigns->lastPage()));
+        }
         $filters   = $request->only(['course_name', 'instructor_name', 'status', 'date_from', 'date_to']);
 
-        // Analytics: monthly reviews (last 6 months)
+        // ── Analytics: monthly reviews (last 6 months) ──
         $arabicMonths = ['01'=>'يناير','02'=>'فبراير','03'=>'مارس','04'=>'أبريل','05'=>'مايو','06'=>'يونيو',
                          '07'=>'يوليو','08'=>'أغسطس','09'=>'سبتمبر','10'=>'أكتوبر','11'=>'نوفمبر','12'=>'ديسمبر'];
         $monthlyData = collect();
         for ($i = 5; $i >= 0; $i--) {
-            $month = now()->subMonths($i)->format('Y-m');
+            $month = $now->copy()->subMonths($i)->format('Y-m');
             $monthlyData[$month] = 0;
         }
-        $rawMonthly = CourseReview::where('created_at', '>=', now()->subMonths(6)->startOfMonth())
-            ->get(['created_at'])
-            ->groupBy(function ($r) { return $r->created_at->format('Y-m'); })
-            ->map->count();
+        // Grouped in SQL (was: every review row of the period hydrated as a model and grouped in PHP).
+        $monthExpr = match (DB::connection()->getDriverName()) {   // constant literals only, never user input
+            'sqlite' => "strftime('%Y-%m', created_at)",
+            'pgsql'  => "to_char(created_at, 'YYYY-MM')",
+            default  => "DATE_FORMAT(created_at, '%Y-%m')",        // mysql / mariadb
+        };
+        $rawMonthly = CourseReview::query()->toBase()
+            ->where('created_at', '>=', $now->copy()->subMonths(6)->startOfMonth())
+            ->selectRaw("$monthExpr AS ym, COUNT(*) AS review_count")
+            ->groupBy('ym')
+            ->orderBy('ym')
+            ->pluck('review_count', 'ym')
+            ->map(fn ($count) => (int) $count);
         $monthlyData   = $monthlyData->merge($rawMonthly);
         $monthlyLabels = $monthlyData->keys()->map(function ($m) use ($arabicMonths) {
             [$year, $month] = explode('-', $m);
@@ -73,49 +131,41 @@ class AdminController extends Controller
         })->values();
         $monthlyValues = $monthlyData->values();
 
-        $recommendYes  = CourseReview::where('would_recommend', 1)->count();
-        $recommendNo   = CourseReview::where('would_recommend', 0)->count();
-        $difficultyRaw = CourseReview::selectRaw('difficulty_level, COUNT(*) as count')
-            ->groupBy('difficulty_level')
-            ->pluck('count', 'difficulty_level');
+        // ── Quick insights: one grouped query instead of three correlated-subquery scans ──
+        // Ties are resolved by the lowest campaign id so the result is deterministic.
+        $perCampaign = CourseReview::query()->toBase()
+            ->selectRaw('review_campaign_id, COUNT(*) AS review_count, AVG(overall_rating) AS avg_rating')
+            ->groupBy('review_campaign_id')
+            ->get()
+            ->map(fn ($row) => (object) [
+                'id'    => (int) $row->review_campaign_id,
+                'count' => (int) $row->review_count,
+                'avg'   => (float) $row->avg_rating,
+            ]);
+        $byRating = [['avg', 'desc'], ['id', 'asc']];
+        $topRow    = $perCampaign->sortBy($byRating)->first();
+        $lowestRow = $perCampaign->sortBy([['avg', 'asc'], ['id', 'asc']])->first();
+        $mostRow   = $perCampaign->sortBy([['count', 'desc'], ['id', 'asc']])->first();
 
-        // ── Campaign status breakdown ──
-        $activeCampaigns   = ReviewCampaign::where('is_active', 1)
-            ->where(function ($q) { $q->whereNull('expires_at')->orWhere('expires_at', '>', now()); })
-            ->count();
-        $inactiveCampaigns  = ReviewCampaign::where('is_active', 0)->count();
-        $expiredCampaigns   = ReviewCampaign::whereNotNull('expires_at')
-            ->where('expires_at', '<', now())->count();
-        $expiringSoonCount  = ReviewCampaign::where('is_active', 1)
-            ->whereNotNull('expires_at')
-            ->where('expires_at', '>=', now())
-            ->where('expires_at', '<=', now()->addDays(7))
-            ->count();
+        $insightModels = ReviewCampaign::whereIn('id', array_filter(array_unique([$topRow?->id, $lowestRow?->id, $mostRow?->id])))->get()->keyBy('id');
+        $insight = function (?object $row, bool $withAverage) use ($insightModels) {
+            if ($row === null) {
+                return null;
+            }
+            $model = clone $insightModels[$row->id];
+            $model->setAttribute('reviews_count', $row->count);
+            if ($withAverage) {
+                $model->setAttribute('reviews_avg_overall_rating', $row->avg);
+            }
 
-        // ── Quick insights ──
-        $topRatedCampaign     = ReviewCampaign::withCount('reviews')
-            ->withAvg('reviews', 'overall_rating')
-            ->whereHas('reviews')
-            ->orderByDesc('reviews_avg_overall_rating')
-            ->first();
-        $lowestRatedCampaign  = ReviewCampaign::withCount('reviews')
-            ->withAvg('reviews', 'overall_rating')
-            ->whereHas('reviews')
-            ->orderBy('reviews_avg_overall_rating')
-            ->first();
-        $mostReviewedCampaign = ReviewCampaign::withCount('reviews')
-            ->whereHas('reviews')
-            ->orderByDesc('reviews_count')
-            ->first();
-        $globalRecommendPct   = $totalReviews > 0 ? round($recommendYes / $totalReviews * 100) : 0;
-
-        // ── Rating breakdown (5 → 1) ──
-        $ratingBreakdown = collect([5, 4, 3, 2, 1])->mapWithKeys(
-            fn ($s) => [$s => CourseReview::where('overall_rating', $s)->count()]
-        );
+            return $model;
+        };
+        $topRatedCampaign     = $insight($topRow, true);
+        $lowestRatedCampaign  = $insight($lowestRow, true);
+        $mostReviewedCampaign = $insight($mostRow, false);
 
         // ── Recent activity ──
-        $latestCampaign = ReviewCampaign::latest()->first();
+        $latestCampaign = ReviewCampaign::latest()->orderBy('id')->first();
 
         return view('admin.dashboard', compact(
             'totalCampaigns', 'totalReviews', 'averageRating',
@@ -151,37 +201,24 @@ class AdminController extends Controller
 
     public function showCampaign(ReviewCampaign $campaign, Request $request)
     {
-        $reviewCount               = $campaign->reviews()->count();
-        $averageRating             = round($campaign->reviews()->avg('overall_rating') ?? 0, 2);
-        $averageContentRating      = round($campaign->reviews()->avg('course_content_rating') ?? 0, 2);
-        $averageInstructorRating   = round($campaign->reviews()->avg('instructor_rating') ?? 0, 2);
-        $averageOrganizationRating = round($campaign->reviews()->avg('organization_rating') ?? 0, 2);
-        $recommendCount            = $campaign->reviews()->where('would_recommend', 1)->count();
-        $recommendPct              = $reviewCount > 0 ? round($recommendCount / $reviewCount * 100) : 0;
+        // One aggregate query instead of six.
+        $stats = $campaign->reviews()->toBase()->selectRaw(
+            'COUNT(*) AS total,
+             AVG(overall_rating) AS avg_overall,
+             AVG(course_content_rating) AS avg_content,
+             AVG(instructor_rating) AS avg_instructor,
+             AVG(organization_rating) AS avg_organization,
+             SUM(CASE WHEN would_recommend = 1 THEN 1 ELSE 0 END) AS recommend_yes'
+        )->first();
 
-        $reviewQuery = $campaign->reviews()->latest();
-        if ($request->filled('student_name')) {
-            $reviewQuery->where('student_name', 'like', '%' . $request->student_name . '%');
-        }
-        if ($request->filled('email')) {
-            $reviewQuery->where('email', 'like', '%' . $request->email . '%');
-        }
-        if ($request->filled('rating')) {
-            $reviewQuery->where('overall_rating', (int) $request->rating);
-        }
-        if ($request->filled('recommend')) {
-            $reviewQuery->where('would_recommend', $request->recommend === 'yes' ? 1 : 0);
-        }
-        if ($request->filled('difficulty')) {
-            $reviewQuery->where('difficulty_level', $request->difficulty);
-        }
-        if ($request->filled('date_from')) {
-            $reviewQuery->whereDate('created_at', '>=', $request->date_from);
-        }
-        if ($request->filled('date_to')) {
-            $reviewQuery->whereDate('created_at', '<=', $request->date_to);
-        }
-        $reviews       = $reviewQuery->paginate(10)->withQueryString();
+        $reviewCount               = (int) $stats->total;
+        $averageRating             = round((float) ($stats->avg_overall ?? 0), 2);
+        $averageContentRating      = round((float) ($stats->avg_content ?? 0), 2);
+        $averageInstructorRating   = round((float) ($stats->avg_instructor ?? 0), 2);
+        $averageOrganizationRating = round((float) ($stats->avg_organization ?? 0), 2);
+        $recommendPct              = $reviewCount > 0 ? round((int) $stats->recommend_yes / $reviewCount * 100) : 0;
+
+        $reviews       = $this->filteredReviews($campaign, $request)->paginate(10)->withQueryString();
         $reviewFilters = $request->only(['student_name', 'email', 'rating', 'recommend', 'difficulty', 'date_from', 'date_to']);
 
         return view('admin.campaigns.show', compact(
@@ -231,7 +268,16 @@ class AdminController extends Controller
 
     public function showCampaignReviews(ReviewCampaign $campaign, Request $request)
     {
-        $reviewQuery = $campaign->reviews()->latest();
+        $reviews       = $this->filteredReviews($campaign, $request)->paginate(15)->withQueryString();
+        $reviewFilters = $request->only(['student_name', 'email', 'rating', 'recommend', 'difficulty', 'date_from', 'date_to']);
+
+        return view('admin.campaigns.reviews', compact('campaign', 'reviews', 'reviewFilters'));
+    }
+
+    /** Filtered review list of a campaign, newest first (id breaks ties so pages never overlap). */
+    private function filteredReviews(ReviewCampaign $campaign, Request $request)
+    {
+        $reviewQuery = $campaign->reviews()->latest()->orderByDesc('id');
         if ($request->filled('student_name')) {
             $reviewQuery->where('student_name', 'like', '%' . $request->student_name . '%');
         }
@@ -247,16 +293,44 @@ class AdminController extends Controller
         if ($request->filled('difficulty')) {
             $reviewQuery->where('difficulty_level', $request->difficulty);
         }
+        $this->applyCreatedAtRange($reviewQuery, $request);
+
+        return $reviewQuery;
+    }
+
+    /**
+     * date_from / date_to filters on created_at as plain range comparisons so the created_at index can be
+     * used (whereDate() wraps the column in DATE(), which cannot). Same result: the end date is inclusive.
+     * A value that is not a real Y-m-d date keeps the legacy whereDate() behaviour instead of failing.
+     */
+    private function applyCreatedAtRange($query, Request $request): void
+    {
         if ($request->filled('date_from')) {
-            $reviewQuery->whereDate('created_at', '>=', $request->date_from);
+            $from = $this->parseDay($request->date_from);
+            $from
+                ? $query->where('created_at', '>=', $from)
+                : $query->whereDate('created_at', '>=', $request->date_from);
         }
         if ($request->filled('date_to')) {
-            $reviewQuery->whereDate('created_at', '<=', $request->date_to);
+            $to = $this->parseDay($request->date_to);
+            $to
+                ? $query->where('created_at', '<', $to->copy()->addDay())
+                : $query->whereDate('created_at', '<=', $request->date_to);
         }
-        $reviews       = $reviewQuery->paginate(15)->withQueryString();
-        $reviewFilters = $request->only(['student_name', 'email', 'rating', 'recommend', 'difficulty', 'date_from', 'date_to']);
+    }
 
-        return view('admin.campaigns.reviews', compact('campaign', 'reviews', 'reviewFilters'));
+    /** Start of the given Y-m-d day, or null when the value is not a valid date in that format. */
+    private function parseDay(mixed $value): ?Carbon
+    {
+        // Years outside a sane window (e.g. 9999-12-31, whose "next day" is not a valid datetime) keep the
+        // legacy whereDate() path, which treats them as plain far-past / far-future dates.
+        if (!is_string($value) || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $value) || (int) substr($value, 0, 4) < 1900 || (int) substr($value, 0, 4) > 2100) {
+            return null;
+        }
+
+        $day = Carbon::createFromFormat('!Y-m-d', $value);
+
+        return $day && $day->format('Y-m-d') === $value ? $day : null;
     }
 
     public function exportCsv(ReviewCampaign $campaign, ExportService $exports)
