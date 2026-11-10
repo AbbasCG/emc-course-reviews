@@ -5,9 +5,12 @@ namespace App\Providers;
 use App\Models\AdminNotification;
 use App\Models\User;
 use App\Support\ClientNetwork;
+use App\Support\RequestStats;
 use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\View;
@@ -15,10 +18,22 @@ use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
 {
-    public function register(): void {}
+    public function register(): void
+    {
+        // One counter object per request (config/monitoring.php).
+        $this->app->scoped(RequestStats::class);
+    }
 
     public function boot(): void
     {
+        // Cheap per-query counters for the request monitor: one closure call per query, SQL templates of slow
+        // queries only (never bindings). Skipped entirely when monitoring is off.
+        if (config('monitoring.enabled')) {
+            DB::listen(function (QueryExecuted $query) {
+                app(RequestStats::class)->record($query->sql, $query->time, (float) config('monitoring.slow_query_ms'));
+            });
+        }
+
         // Every authenticated account is an admin in this system, so exporting
         // follows the existing auth guard. Personal data can be narrowed further
         // via EXPORT_PII_ALLOWED_EMAILS.
