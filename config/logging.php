@@ -65,6 +65,17 @@ return [
             'replace_placeholders' => true,
         ],
 
+        // Request monitoring (config/monitoring.php): one JSON object per line, no stack traces, rotated daily.
+        'performance' => [
+            'driver' => 'daily',
+            'path' => storage_path('logs/performance.log'),
+            'level' => 'info',
+            'days' => env('MONITORING_LOG_DAYS', 14),
+            'formatter' => Monolog\Formatter\JsonFormatter::class,
+            'formatter_with' => ['includeStacktraces' => false],
+            'replace_placeholders' => false,
+        ],
+
         'daily' => [
             'driver' => 'daily',
             'path' => storage_path('logs/laravel.log'),
