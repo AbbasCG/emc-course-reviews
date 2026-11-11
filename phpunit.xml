@@ -30,8 +30,11 @@
         <env name="QUEUE_CONNECTION" value="sync"/>
         <env name="SESSION_DRIVER" value="array"/>
         <env name="TRUSTED_PROXIES" value=""/>
-        <env name="REVIEW_RATE_PER_IP" value="300"/>
+        <env name="REVIEW_MAX_CLASS_SIZE" value="500"/>
+        <env name="REVIEW_RATE_PER_IP" value="600"/>
         <env name="REVIEW_RATE_PER_SESSION" value="6"/>
+        <env name="REVIEW_RATE_UNTRUSTED_PER_IP" value="20"/>
+        <env name="REVIEW_TICKET_MIN_SECONDS" value="3"/>
         <env name="PULSE_ENABLED" value="false"/>
         <env name="TELESCOPE_ENABLED" value="false"/>
         <env name="NIGHTWATCH_ENABLED" value="false"/>

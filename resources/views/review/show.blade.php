@@ -574,7 +574,10 @@ function reviewForm() {
                     else if (this.errors.what_did_you_like || this.errors.what_can_be_improved) this.currentStep = 3;
                     else this.globalError = 'يرجى التحقق من البيانات المدخلة.';
                 } else if (response.status === 429) {
-                    this.globalError = 'يرجى الانتظار قليلًا قبل المحاولة مرة أخرى.';
+                    const data = await response.json().catch(() => ({}));
+                    const wait = parseInt(response.headers.get('Retry-After') || data.retry_after || '0', 10);
+                    this.globalError = (data.message || 'يرجى الانتظار قليلًا قبل المحاولة مرة أخرى.')
+                        + (wait > 0 && wait <= 120 ? ' (' + wait + ' ثانية)' : '');
                 } else if (response.status === 409) {
                     const data = await response.json().catch(() => ({}));
                     this.globalError = data.message || 'جارٍ معالجة تقييمك، يرجى الانتظار لحظات.';
