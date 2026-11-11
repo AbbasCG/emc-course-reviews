@@ -36,6 +36,19 @@ Artisan::command('exports:prune', function () {
 
 Schedule::command('exports:prune')->dailyAt('03:00');
 
+// Expired cache rows / sessions (docs/CACHE-SESSIONS-MAINTENANCE.md). Scheduled automatically only for the DATABASE drivers, where rows
+// pile up and Laravel's own cleanup is a single unbatched delete in a visitor's request; with the file drivers (production today) nothing
+// new runs unless MAINTENANCE_SCHEDULE_CACHE / MAINTENANCE_SCHEDULE_SESSIONS are set to true.
+Schedule::command('cache:prune-expired --batch=1000 --sleep=50')
+    ->dailyAt('03:30')
+    ->withoutOverlapping(60)
+    ->when(fn () => config('maintenance.schedule.cache') ?? (config('cache.default') === 'database'));
+
+Schedule::command('sessions:prune-expired --batch=1000 --sleep=50')
+    ->dailyAt('03:40')
+    ->withoutOverlapping(60)
+    ->when(fn () => config('maintenance.schedule.sessions') ?? (config('session.driver') === 'database'));
+
 if (config('exports.schedule_queue_worker')) {
     // Shared hosting (Hostinger): process queued exports from the cron-driven scheduler.
     Schedule::command('queue:work --stop-when-empty --tries=1 --timeout=900 --max-time=55')
