@@ -7,11 +7,13 @@ use App\Http\Controllers\ExportController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\ReviewController;
 use App\Http\Controllers\AuthController;
+use App\Http\Middleware\ThrottleLoginAttempts;
+use App\Http\Middleware\ThrottleReviewSubmission;
 
 // Auth routes
 Route::middleware('guest')->group(function () {
     Route::get('/login', [AuthController::class, 'showLogin'])->name('login');
-    Route::post('/login', [AuthController::class, 'login'])->name('login.post');
+    Route::post('/login', [AuthController::class, 'login'])->name('login.post')->middleware(ThrottleLoginAttempts::class);
 });
 Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
 
@@ -54,7 +56,7 @@ Route::prefix('admin')->name('admin.')->middleware('auth')->group(function () {
 // Root redirect
 Route::get('/', fn() => redirect()->route('admin.dashboard'));
 
-// Student Review Routes (public) — rate limit: the 'review-submit' limiter (AppServiceProvider, config/ratelimits.php)
+// Student Review Routes (public) — layered rate limit: ThrottleReviewSubmission (config/ratelimits.php, docs/RATE-LIMITING.md)
 Route::get('/review/{token}', [ReviewController::class, 'show'])->name('review.show');
-Route::post('/review/{token}', [ReviewController::class, 'store'])->name('review.store')->middleware('throttle:review-submit');
+Route::post('/review/{token}', [ReviewController::class, 'store'])->name('review.store')->middleware(ThrottleReviewSubmission::class);
 Route::get('/review/{token}/success', [ReviewController::class, 'success'])->name('review.success');

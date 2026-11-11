@@ -72,6 +72,7 @@ class PerformanceMonitor
                 'queries'        => $stats->queries,
                 'query_ms'       => round($stats->queryMs, 1),
                 'slow_queries'   => $stats->slow ?: null,
+                'rate_limit'     => $request->attributes->get('rate_limit_layer'),   // which layer answered 429, never who
                 'ip_hash'        => $this->ipHash($request),
             ], fn ($value) => $value !== null));
         } catch (Throwable) {
